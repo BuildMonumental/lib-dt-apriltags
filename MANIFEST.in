@@ -1,2 +1,0 @@
-include dt_apriltags/libapriltag.so
-include dt_apriltags/libapriltag.dylib

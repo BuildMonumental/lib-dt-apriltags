@@ -1,19 +1,32 @@
-[tool.poetry]
-name = "dt-apriltags"
-version = "0.0.0"
-description = "apriltags"
-authors = []
-readme = "README.md"
-repository = "https://github.com/terraform-industries/lib-dt-apriltags"
-
-[tool.poetry.dependencies]
-python = ">=3.8"
-numpy = "*"
-
-[tool.poetry.group.test.dependencies]
-opencv-python = "^4.7.0.72"
-pyyaml = "^6.0"
-
 [build-system]
-requires = ["setuptools>=40.8.0", "numpy", "wheel"]
-build-backend = "setuptools.build_meta:__legacy__"
+requires = ["scikit-build-core>=0.11.6", "pybind11", "numpy"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "dt-apriltags"
+version = "3.4.5"
+description = "Python bindings for the Apriltags library"
+authors = [{ name = "Aleksandar Petrov", email = "alpetrov@ethz.ch" }]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["numpy"]
+
+[project.urls]
+Homepage = "https://github.com/duckietown/lib-dt-apriltags"
+Repository = "https://github.com/terraform-industries/lib-dt-apriltags"
+
+[project.optional-dependencies]
+test = ["opencv-python>=4.7.0.72", "pyyaml>=6.0", "pytest>=7.0.0"]
+
+[tool.scikit-build]
+cmake.source-dir = "apriltags"
+wheel.packages = ["dt_apriltags"]
+cmake.args = ["-DBUILD_EXAMPLES=OFF", "-DBUILD_PYTHON_WRAPPER=OFF", "-DCMAKE_INSTALL_LIBDIR=dt_apriltags"]
+editable.mode = "inplace"
+editable.rebuild = false
+editable.verbose = true
+build-dir = "build"
+install.strip = false
+sdist.include = ["apriltags/**"]
+sdist.exclude = ["apriltags/.git/**"]
+wheel.license-files = []

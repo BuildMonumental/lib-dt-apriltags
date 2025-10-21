@@ -1,8 +1,10 @@
 from dt_apriltags import Detector
 import numpy
-import os
+from pathlib import Path
 
-test_images_path = 'test_files'
+# Get the directory containing this test file
+TEST_DIR = Path(__file__).parent
+test_images_path = TEST_DIR / 'test_files'
 
 visualization = False
 try:
@@ -30,14 +32,14 @@ at_detector = Detector(families='tag36h11',
                        decode_sharpening=0.25,
                        debug=0)
 
-with open(test_images_path + '/test_info.yaml', 'r') as stream:
+with open(test_images_path / 'test_info.yaml', 'r') as stream:
     parameters = yaml.safe_load(stream)
 
 #### test WITH THE SAMPLE IMAGE ####
 
 print("\n\nTESTING WITH A SAMPLE IMAGE")
 
-img = cv2.imread(test_images_path+'/'+parameters['sample_test']['file'], cv2.IMREAD_GRAYSCALE)
+img = cv2.imread(str(test_images_path / parameters['sample_test']['file']), cv2.IMREAD_GRAYSCALE)
 cameraMatrix = numpy.array(parameters['sample_test']['K']).reshape((3,3))
 camera_params = ( cameraMatrix[0,0], cameraMatrix[1,1], cameraMatrix[0,2], cameraMatrix[1,2] )
 
@@ -76,13 +78,12 @@ print("\n\nTESTING WITH ROTATION IMAGES")
 time_num = 0
 time_sum = 0
 
-test_images_path = 'test_files'
 image_names = parameters['rotation_test']['files']
 
 for image_name in image_names:
     print("Testing image ", image_name)
-    ab_path = test_images_path + '/' + image_name
-    if(not os.path.isfile(ab_path)):
+    ab_path = test_images_path / image_name
+    if not ab_path.is_file():
         continue
     groundtruth = float(image_name.split('_')[-1].split('.')[0])  # name of test_files image should be set to its groundtruth
 
@@ -90,7 +91,7 @@ for image_name in image_names:
     cameraMatrix = numpy.array(parameters['rotation_test']['K']).reshape((3,3))
     camera_params = ( cameraMatrix[0,0], cameraMatrix[1,1], cameraMatrix[0,2], cameraMatrix[1,2] )
 
-    img = cv2.imread(ab_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(str(ab_path), cv2.IMREAD_GRAYSCALE)
 
     start = time.time()
     tags = at_detector.detect(img, True, camera_params, parameters['rotation_test']['tag_size'])
@@ -114,14 +115,14 @@ image_names = parameters['multiple_tags_test']['files']
 
 for image_name in image_names:
     print("Testing image ", image_name)
-    ab_path = test_images_path + '/' + image_name
-    if(not os.path.isfile(ab_path)):
+    ab_path = test_images_path / image_name
+    if not ab_path.is_file():
         continue
 
     cameraMatrix = numpy.array(parameters['multiple_tags_test']['K']).reshape((3,3))
     camera_params = ( cameraMatrix[0,0], cameraMatrix[1,1], cameraMatrix[0,2], cameraMatrix[1,2] )
 
-    img = cv2.imread(ab_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(str(ab_path), cv2.IMREAD_GRAYSCALE)
 
     start = time.time()
     tags = at_detector.detect(img, True, camera_params, parameters['multiple_tags_test']['tag_size'])

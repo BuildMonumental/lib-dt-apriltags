@@ -212,7 +212,7 @@ class Detector(object):
                  decode_sharpening=0.25,
                  debug=0,
                  hamming=2,
-                 searchpath=['apriltags', '.', dir_path]):
+                 searchpath=['apriltags', '.', dir_path, '../apriltags']):
 
         # Parse the parameters
         self.params = dict()

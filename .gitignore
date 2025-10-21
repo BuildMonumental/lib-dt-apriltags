@@ -107,3 +107,4 @@ venv.bak/
 .idea
 core
 
+.DS_Store

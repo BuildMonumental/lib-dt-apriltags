@@ -323,7 +323,7 @@ class Detector(object):
         self.tag_detector_ptr.contents.quad_decimate = float(self.params['quad_decimate'])
         self.tag_detector_ptr.contents.quad_sigma = float(self.params['quad_sigma'])
         self.tag_detector_ptr.contents.refine_edges = int(self.params['refine_edges'])
-        self.tag_detector_ptr.contents.decode_sharpening = int(self.params['decode_sharpening'])
+        self.tag_detector_ptr.contents.decode_sharpening = float(self.params['decode_sharpening'])
         self.tag_detector_ptr.contents.debug = int(self.params['debug'])
 
     def __del__(self):

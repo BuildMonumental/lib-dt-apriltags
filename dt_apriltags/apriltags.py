@@ -361,6 +361,15 @@ class Detector(object):
 
         c_img = _ImageU8(height=img.shape[0], width=img.shape[1], stride=img.strides[0], buf=img.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)))
 
+        if estimate_tag_pose:
+            if camera_params is None:
+                raise Exception(
+                    'camera_params must be provided to detect if estimate_tag_pose is set to True')
+            if tag_size is None:
+                raise Exception(
+                    'tag_size must be provided to detect if estimate_tag_pose is set to True')
+            camera_fx, camera_fy, camera_cx, camera_cy = camera_params
+
         return_info = []
 
         # detect apriltags in the image
@@ -390,15 +399,6 @@ class Detector(object):
             detection.corners = corners
 
             if estimate_tag_pose:
-                if camera_params == None:
-                    raise Exception(
-                        'camera_params must be provided to detect if estimate_tag_pose is set to True')
-                if tag_size == None:
-                    raise Exception(
-                        'tag_size must be provided to detect if estimate_tag_pose is set to True')
-
-                camera_fx, camera_fy, camera_cx, camera_cy = [c for c in camera_params]
-
                 info = _ApriltagDetectionInfo(det=apriltag,
                                               tagsize=tag_size,
                                               fx=camera_fx,

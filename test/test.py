@@ -40,13 +40,11 @@ with open(test_images_path / 'test_info.yaml', 'r') as stream:
 print("\n\nTESTING WITH A SAMPLE IMAGE")
 
 img = cv2.imread(str(test_images_path / parameters['sample_test']['file']), cv2.IMREAD_GRAYSCALE)
-cameraMatrix = numpy.array(parameters['sample_test']['K']).reshape((3,3))
-camera_params = ( cameraMatrix[0,0], cameraMatrix[1,1], cameraMatrix[0,2], cameraMatrix[1,2] )
 
 if visualization:
     cv2.imshow('Original image',img)
 
-tags = at_detector.detect(img, True, camera_params, parameters['sample_test']['tag_size'])
+tags = at_detector.detect(img)
 print(tags)
 
 color_img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -85,22 +83,16 @@ for image_name in image_names:
     ab_path = test_images_path / image_name
     if not ab_path.is_file():
         continue
-    groundtruth = float(image_name.split('_')[-1].split('.')[0])  # name of test_files image should be set to its groundtruth
-
-    parameters['rotation_test']['rotz'] = groundtruth
-    cameraMatrix = numpy.array(parameters['rotation_test']['K']).reshape((3,3))
-    camera_params = ( cameraMatrix[0,0], cameraMatrix[1,1], cameraMatrix[0,2], cameraMatrix[1,2] )
 
     img = cv2.imread(str(ab_path), cv2.IMREAD_GRAYSCALE)
 
     start = time.time()
-    tags = at_detector.detect(img, True, camera_params, parameters['rotation_test']['tag_size'])
+    tags = at_detector.detect(img)
 
     time_sum+=time.time()-start
     time_num+=1
 
-    print(tags[0].pose_t, parameters['rotation_test']['posx'], parameters['rotation_test']['posy'], parameters['rotation_test']['posz'])
-    print(tags[0].pose_R, parameters['rotation_test']['rotx'], parameters['rotation_test']['roty'], parameters['rotation_test']['rotz'])
+    print(tags[0])
 
 print("AVG time per detection: ", time_sum/time_num)
 
@@ -119,13 +111,10 @@ for image_name in image_names:
     if not ab_path.is_file():
         continue
 
-    cameraMatrix = numpy.array(parameters['multiple_tags_test']['K']).reshape((3,3))
-    camera_params = ( cameraMatrix[0,0], cameraMatrix[1,1], cameraMatrix[0,2], cameraMatrix[1,2] )
-
     img = cv2.imread(str(ab_path), cv2.IMREAD_GRAYSCALE)
 
     start = time.time()
-    tags = at_detector.detect(img, True, camera_params, parameters['multiple_tags_test']['tag_size'])
+    tags = at_detector.detect(img)
     time_sum+=time.time()-start
     time_num+=1
 

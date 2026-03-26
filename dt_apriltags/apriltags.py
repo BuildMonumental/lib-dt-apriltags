@@ -14,7 +14,7 @@ Current maintainer: Andrea F. Daniele
 """
 import ctypes
 import os
-from collections.abc import Sequence
+from typing import Any
 
 import numpy
 import numpy.typing as npt
@@ -96,42 +96,23 @@ class _ApriltagDetector(ctypes.Structure):
     ]
 
 
-class _ApriltagDetectionInfo(ctypes.Structure):
-    """Wraps apriltag_detection_info C struct."""
-    _fields_ = [
-        ('det', ctypes.POINTER(_ApriltagDetection)),
-        ('tagsize', ctypes.c_double),
-        ('fx', ctypes.c_double),
-        ('fy', ctypes.c_double),
-        ('cx', ctypes.c_double),
-        ('cy', ctypes.c_double)
-    ]
-
-
-class _ApriltagPose(ctypes.Structure):
-    """Wraps apriltag_pose C struct."""
-    _fields_ = [
-        ('R', ctypes.POINTER(_Matd)),
-        ('t', ctypes.POINTER(_Matd))
-    ]
-
 
 ######################################################################
 
-def _ptr_to_array2d(datatype: type[ctypes._SimpleCData], ptr: ctypes._CData, rows: int, cols: int) -> npt.NDArray[numpy.float64]:
+def _ptr_to_array2d(datatype: Any, ptr: Any, rows: int, cols: int) -> npt.NDArray[numpy.float64]:
     array_type = (datatype * cols) * rows
     array_buf = array_type.from_address(ctypes.addressof(ptr))
     return numpy.ctypeslib.as_array(array_buf, shape=(rows, cols))
 
 
-def _matd_get_array(mat_ptr: ctypes._Pointer[_Matd]) -> npt.NDArray[numpy.float64]:
+def _matd_get_array(mat_ptr: Any) -> npt.NDArray[numpy.float64]:
     return _ptr_to_array2d(ctypes.c_double,
                            mat_ptr.contents.data,
                            int(mat_ptr.contents.nrows),
                            int(mat_ptr.contents.ncols))
 
 
-def _zarray_get(za: ctypes._Pointer[_ZArray], idx: int, ptr: ctypes._CData) -> None:
+def _zarray_get(za: Any, idx: int, ptr: Any) -> None:
     # memcpy(p, &za->data[idx*za->el_sz], za->el_sz);
     #
     # p                           = ptr
@@ -145,33 +126,29 @@ def _zarray_get(za: ctypes._Pointer[_ZArray], idx: int, ptr: ctypes._CData) -> N
 
 class Detection():
     """
-    Combined pythonic wrapper for apriltag_detection and apriltag_pose
+    Pythonic wrapper for a single apriltag detection result.
     """
     __slots__ = ('tag_family', 'tag_id', 'hamming', 'decision_margin',
-                 'homography', 'center', 'corners', 'pose_R', 'pose_t', 'pose_err')
+                 'homography', 'center', 'corners')
 
-    tag_family: bytes | None
-    tag_id: int | None
-    hamming: int | None
-    decision_margin: float | None
-    homography: npt.NDArray[numpy.float64] | None
-    center: npt.NDArray[numpy.float64] | None
-    corners: npt.NDArray[numpy.float64] | None
-    pose_R: npt.NDArray[numpy.float64] | None
-    pose_t: npt.NDArray[numpy.float64] | None
-    pose_err: float | None
+    tag_family: bytes
+    tag_id: int
+    hamming: int
+    decision_margin: float
+    homography: npt.NDArray[numpy.float64]
+    center: npt.NDArray[numpy.float64]
+    corners: npt.NDArray[numpy.float64]
 
-    def __init__(self) -> None:
-        self.tag_family = None
-        self.tag_id = None
-        self.hamming = None
-        self.decision_margin = None
-        self.homography = None
-        self.center = None
-        self.corners = None
-        self.pose_R = None
-        self.pose_t = None
-        self.pose_err = None
+    def __init__(self, tag_family: bytes, tag_id: int, hamming: int,
+                 decision_margin: float, homography: npt.NDArray[numpy.float64],
+                 center: npt.NDArray[numpy.float64], corners: npt.NDArray[numpy.float64]) -> None:
+        self.tag_family = tag_family
+        self.tag_id = tag_id
+        self.hamming = hamming
+        self.decision_margin = decision_margin
+        self.homography = homography
+        self.center = center
+        self.corners = corners
 
     def __str__(self) -> str:
         return ('Detection object:' +
@@ -181,10 +158,7 @@ class Detection():
                 '\ndecision_margin = ' + str(self.decision_margin) +
                 '\nhomography = ' + str(self.homography) +
                 '\ncenter = ' + str(self.center) +
-                '\ncorners = ' + str(self.corners) +
-                '\npose_R = ' + str(self.pose_R) +
-                '\npose_t = ' + str(self.pose_t) +
-                '\npose_err = ' + str(self.pose_err) + '\n')
+                '\ncorners = ' + str(self.corners) + '\n')
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -235,24 +209,22 @@ class Detector(object):
 
         filename = 'libapriltag' + extension
 
-        self.libc: ctypes.CDLL | None = None
-        self.tag_detector = None
-        self.tag_detector_ptr: ctypes._Pointer[_ApriltagDetector] | None = None
+        self.tag_detector_ptr: Any = None
 
+        libc: ctypes.CDLL | None = None
         for path in searchpath:
             relpath = os.path.join(os.path.dirname(__file__), path, filename)
             if os.path.exists(relpath):
-                self.libc = ctypes.CDLL(relpath)
+                libc = ctypes.CDLL(relpath)
                 break
 
         # if full path not found just try opening the raw filename;
         # this should search whatever paths dlopen is supposed to
         # search.
-        if self.libc is None:
-            self.libc = ctypes.CDLL(os.path.join(os.path.dirname(__file__), filename))
+        if libc is None:
+            libc = ctypes.CDLL(os.path.join(os.path.dirname(__file__), filename))
 
-        if self.libc is None:
-            raise RuntimeError('could not find DLL named ' + filename)
+        self.libc = libc
 
         # Set restypes
         self.libc.apriltag_detections_destroy.restype = None
@@ -260,9 +232,6 @@ class Detector(object):
         self.libc.apriltag_detector_create.restype = ctypes.POINTER(_ApriltagDetector)
         self.libc.apriltag_detector_destroy.restype = None
         self.libc.apriltag_detector_detect.restype = ctypes.POINTER(_ZArray)
-        self.libc.estimate_tag_pose.restype = ctypes.c_double
-        self.libc.matd_destroy.restype = None
-        self.libc.matd_destroy.restype = None
         self.libc.tag16h5_create.restype = ctypes.POINTER(_ApriltagFamily)
         self.libc.tag16h5_destroy.restype = None
         self.libc.tag25h9_create.restype = ctypes.POINTER(_ApriltagFamily)
@@ -284,7 +253,7 @@ class Detector(object):
         self.tag_detector_ptr = self.libc.apriltag_detector_create()
 
         # create the family
-        self.tag_families: dict[str, tuple[ctypes._Pointer[_ApriltagFamily], object]] = dict()
+        self.tag_families: dict[str, tuple[Any, Any]] = dict()
         known_families = {
             'tag16h5': (self.libc.tag16h5_create, self.libc.tag16h5_destroy),
             'tag25h9': (self.libc.tag25h9_create, self.libc.tag25h9_destroy),
@@ -321,24 +290,15 @@ class Detector(object):
             for tf, destroy_fn in self.tag_families.values():
                 destroy_fn(tf)
 
-    def detect(self, img: npt.NDArray[numpy.uint8], estimate_tag_pose: bool = False, camera_params: Sequence[float] | None = None, tag_size: float | None = None) -> list[Detection]:
+    def detect(self, img: npt.NDArray[numpy.uint8]) -> list[Detection]:
         """
-        Run detectons on the provided image. The image must be a grayscale
+        Run detections on the provided image. The image must be a grayscale
         image of type numpy.uint8.
         """
         assert len(img.shape) == 2
         assert img.dtype == numpy.uint8
 
         c_img = _ImageU8(height=img.shape[0], width=img.shape[1], stride=img.strides[0], buf=img.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)))
-
-        if estimate_tag_pose:
-            if camera_params is None:
-                raise Exception(
-                    'camera_params must be provided to detect if estimate_tag_pose is set to True')
-            if tag_size is None:
-                raise Exception(
-                    'tag_size must be provided to detect if estimate_tag_pose is set to True')
-            camera_fx, camera_fy, camera_cx, camera_cy = camera_params
 
         return_info: list[Detection] = []
 
@@ -354,40 +314,16 @@ class Detector(object):
 
             tag = apriltag.contents
 
-            homography = _matd_get_array(
-                tag.H).copy()  # numpy.zeros((3,3))  # Don't ask questions, move on with your life
-            center = numpy.ctypeslib.as_array(tag.c, shape=(2,)).copy()
-            corners = numpy.ctypeslib.as_array(tag.p, shape=(4, 2)).copy()
+            detection = Detection(
+                tag_family=ctypes.string_at(tag.family.contents.name),
+                tag_id=tag.id,
+                hamming=tag.hamming,
+                decision_margin=tag.decision_margin,
+                homography=_matd_get_array(tag.H).copy(),
+                center=numpy.ctypeslib.as_array(tag.c, shape=(2,)).copy(),
+                corners=numpy.ctypeslib.as_array(tag.p, shape=(4, 2)).copy(),
+            )
 
-            detection = Detection()
-            detection.tag_family = ctypes.string_at(tag.family.contents.name)
-            detection.tag_id = tag.id
-            detection.hamming = tag.hamming
-            detection.decision_margin = tag.decision_margin
-            detection.homography = homography
-            detection.center = center
-            detection.corners = corners
-
-            if estimate_tag_pose:
-                info = _ApriltagDetectionInfo(det=apriltag,
-                                              tagsize=tag_size,
-                                              fx=camera_fx,
-                                              fy=camera_fy,
-                                              cx=camera_cx,
-                                              cy=camera_cy)
-                pose = _ApriltagPose()
-
-                err = self.libc.estimate_tag_pose(ctypes.byref(info), ctypes.byref(pose))
-
-                detection.pose_R = _matd_get_array(pose.R).copy()
-                detection.pose_t = _matd_get_array(pose.t).copy()
-                detection.pose_err = err
-
-                self.libc.matd_destroy(pose.R)
-
-                self.libc.matd_destroy(pose.t)
-
-            # append this dict to the tag data array
             return_info.append(detection)
 
         self.libc.apriltag_detections_destroy(detections)

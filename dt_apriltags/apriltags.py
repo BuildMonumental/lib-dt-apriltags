@@ -283,40 +283,23 @@ class Detector(object):
 
         # create the family
         self.tag_families = dict()
-        if 'tag16h5' in self.params['families']:
-            self.tag_families['tag16h5'] = self.libc.tag16h5_create()
+        known_families = {
+            'tag16h5': (self.libc.tag16h5_create, self.libc.tag16h5_destroy),
+            'tag25h9': (self.libc.tag25h9_create, self.libc.tag25h9_destroy),
+            'tag36h11': (self.libc.tag36h11_create, self.libc.tag36h11_destroy),
+            'tagCircle21h7': (self.libc.tagCircle21h7_create, self.libc.tagCircle21h7_destroy),
+            'tagCircle49h12': (self.libc.tagCircle49h12_create, self.libc.tagCircle49h12_destroy),
+            'tagCustom48h12': (self.libc.tagCustom48h12_create, self.libc.tagCustom48h12_destroy),
+            'tagStandard41h12': (self.libc.tagStandard41h12_create, self.libc.tagStandard41h12_destroy),
+            'tagStandard52h13': (self.libc.tagStandard52h13_create, self.libc.tagStandard52h13_destroy),
+        }
+        for family in self.params['families']:
+            if family not in known_families:
+                raise Exception('Unrecognized tag family name: %r. Use e.g. \'tag36h11\'.\n' % family)
+            create_fn, destroy_fn = known_families[family]
+            self.tag_families[family] = (create_fn(), destroy_fn)
             self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tag16h5'], hamming)
-        elif 'tag25h9' in self.params['families']:
-            self.tag_families['tag25h9'] = self.libc.tag25h9_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tag25h9'], hamming)
-        elif 'tag36h11' in self.params['families']:
-            self.tag_families['tag36h11'] = self.libc.tag36h11_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tag36h11'], hamming)
-        elif 'tagCircle21h7' in self.params['families']:
-            self.tag_families['tagCircle21h7'] = self.libc.tagCircle21h7_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tagCircle21h7'], hamming)
-        elif 'tagCircle49h12' in self.params['families']:
-            self.tag_families['tagCircle49h12'] = self.libc.tagCircle49h12_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tagCircle49h12'], hamming)
-        elif 'tagCustom48h12' in self.params['families']:
-            self.tag_families['tagCustom48h12'] = self.libc.tagCustom48h12_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tagCustom48h12'], hamming)
-        elif 'tagStandard41h12' in self.params['families']:
-            self.tag_families['tagStandard41h12'] = self.libc.tagStandard41h12_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tagStandard41h12'], hamming)
-        elif 'tagStandard52h13' in self.params['families']:
-            self.tag_families['tagStandard52h13'] = self.libc.tagStandard52h13_create()
-            self.libc.apriltag_detector_add_family_bits(self.tag_detector_ptr,
-                                                        self.tag_families['tagStandard52h13'], hamming)
-        else:
-            raise Exception('Unrecognized tag family name. Use e.g. \'tag36h11\'.\n')
+                                                        self.tag_families[family][0], hamming)
 
         # configure the parameters of the detector
         self.tag_detector_ptr.contents.nthreads = int(self.params['nthreads'])
@@ -333,23 +316,8 @@ class Detector(object):
             self.libc.apriltag_detector_destroy(self.tag_detector_ptr)
 
             # destroy the tag families
-            for family, tf in self.tag_families.items():
-                if 'tag16h5' == family:
-                    self.libc.tag16h5_destroy(tf)
-                elif 'tag25h9' == family:
-                    self.libc.tag25h9_destroy(tf)
-                elif 'tag36h11' == family:
-                    self.libc.tag36h11_destroy(tf)
-                elif 'tagCircle21h7' == family:
-                    self.libc.tagCircle21h7_destroy(tf)
-                elif 'tagCircle49h12' == family:
-                    self.libc.tagCircle49h12_destroy(tf)
-                elif 'tagCustom48h12' == family:
-                    self.libc.tagCustom48h12_destroy(tf)
-                elif 'tagStandard41h12' == family:
-                    self.libc.tagStandard41h12_destroy(tf)
-                elif 'tagStandard52h13' == family:
-                    self.libc.tagStandard52h13_destroy(tf)
+            for tf, destroy_fn in self.tag_families.values():
+                destroy_fn(tf)
 
     def detect(self, img, estimate_tag_pose=False, camera_params=None, tag_size=None):
         """

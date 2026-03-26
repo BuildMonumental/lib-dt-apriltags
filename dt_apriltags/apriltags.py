@@ -13,6 +13,7 @@ Current maintainer: Andrea F. Daniele
 
 """
 import ctypes
+import math
 import os
 from typing import Any
 
@@ -84,15 +85,29 @@ class _ApriltagDetection(ctypes.Structure):
     ]
 
 
+class _ApriltagQuadThreshParams(ctypes.Structure):
+    """Wraps apriltag_quad_thresh_params C struct."""
+    _fields_ = [
+        ('min_cluster_pixels', ctypes.c_int),
+        ('max_nmaxima', ctypes.c_int),
+        ('critical_rad', ctypes.c_float),
+        ('cos_critical_rad', ctypes.c_float),
+        ('max_line_fit_mse', ctypes.c_float),
+        ('min_white_black_diff', ctypes.c_int),
+        ('deglitch', ctypes.c_int),
+    ]
+
+
 class _ApriltagDetector(ctypes.Structure):
     """Wraps apriltag_detector C struct."""
     _fields_ = [
         ('nthreads', ctypes.c_int),
         ('quad_decimate', ctypes.c_float),
         ('quad_sigma', ctypes.c_float),
-        ('refine_edges', ctypes.c_int),
+        ('refine_edges', ctypes.c_bool),
         ('decode_sharpening', ctypes.c_double),
-        ('debug', ctypes.c_int)
+        ('debug', ctypes.c_bool),
+        ('qtp', _ApriltagQuadThreshParams),
     ]
 
 
@@ -170,23 +185,41 @@ class Detector(object):
     """
     Pythonic wrapper for apriltag_detector.
 
-    families: Tag families, separated with a space, default: tag36h11
+    All defaults match the C library's apriltag_detector_create().
 
-    nthreads: Number of threads, default: 1
-
-    quad_decimate: Detection of quads can be done on a lower-resolution image, improving speed at a cost of pose accuracy and a slight decrease in detection rate. Decoding the binary payload is still done at full resolution, default: 2.0
-
-    quad_sigma: What Gaussian blur should be applied to the segmented image (used for quad detection?)  Parameter is the standard deviation in pixels.  Very noisy images benefit from non-zero values (e.g. 0.8), default:  0.0
-
-    refine_edges: When non-zero, the edges of the each quad are adjusted to "snap to" strong gradients nearby. This is useful when decimation is employed, as it can increase the quality of the initial quad estimate substantially. Generally recommended to be on (1). Very computationally inexpensive. Option is ignored if quad_decimate = 1, default: 1
-
-    decode_sharpening: How much sharpening should be done to decoded images? This can help decode small tags but may or may not help in odd lighting conditions or low light conditions, default = 0.25
-
-    searchpath: Where to look for the Apriltag 3 library, must be a list, default: ['apriltags']
-
-    debug: If 1, will save debug images. Runs very slow, default: 0
-
-    hamming: Hamming distance to initialize tag families with, default: 2
+    Args:
+        families: Tag families, separated with a space.
+        nthreads: Number of threads.
+        quad_decimate: Detection of quads can be done on a lower-resolution
+            image, improving speed at a cost of pose accuracy and a slight
+            decrease in detection rate. Decoding the binary payload is still
+            done at full resolution.
+        quad_sigma: Gaussian blur standard deviation (in pixels) applied to
+            the segmented image for quad detection. Very noisy images benefit
+            from non-zero values (e.g. 0.8).
+        refine_edges: When true, the edges of each quad are adjusted to "snap
+            to" strong gradients nearby. Useful when decimation is employed.
+            Ignored if quad_decimate = 1.
+        decode_sharpening: How much sharpening should be done to decoded
+            images. Can help decode small tags but may or may not help in odd
+            or low light conditions.
+        debug: When true, write debugging images to the current working
+            directory at various stages through the detection process.
+        hamming: Hamming distance to initialize tag families with.
+        searchpath: Where to look for the Apriltag 3 library.
+        min_cluster_pixels: Reject quads containing too few pixels.
+        max_nmaxima: How many corner candidates to consider when segmenting
+            a group of pixels into a quad.
+        critical_rad: Reject quads where pairs of edges have angles that are
+            close to straight or close to 180 degrees (in radians). None keeps
+            the C library default (cos of 10 degrees).
+        max_line_fit_mse: Maximum mean squared error when fitting lines to
+            contours. Rejects contours far from quad shaped early, saving
+            expensive decoding.
+        min_white_black_diff: Minimum brightness difference (0-255) between
+            the white and black models when decoding.
+        deglitch: Whether to deglitch the thresholded image. Only useful for
+            very noisy images.
     """
 
     def __init__(self,
@@ -194,11 +227,18 @@ class Detector(object):
                  nthreads: int = 1,
                  quad_decimate: float = 2.0,
                  quad_sigma: float = 0.0,
-                 refine_edges: int = 1,
+                 refine_edges: bool = True,
                  decode_sharpening: float = 0.25,
-                 debug: int = 0,
+                 debug: bool = False,
                  hamming: int = 2,
-                 searchpath: list[str] = ['apriltags', '.', dir_path, '../apriltags']) -> None:
+                 searchpath: list[str] = ['apriltags', '.', dir_path, '../apriltags'],
+                 # quad threshold params
+                 min_cluster_pixels: int = 24,
+                 max_nmaxima: int = 10,
+                 critical_rad: float | None = None,
+                 max_line_fit_mse: float = 10.0,
+                 min_white_black_diff: int = 5,
+                 deglitch: bool = False) -> None:
 
         # detect OS to get extension for DLL
         uname0 = os.uname()[0]
@@ -273,12 +313,23 @@ class Detector(object):
                                                         self.tag_families[family][0], hamming)
 
         # configure the parameters of the detector
-        self.tag_detector_ptr.contents.nthreads = nthreads
-        self.tag_detector_ptr.contents.quad_decimate = quad_decimate
-        self.tag_detector_ptr.contents.quad_sigma = quad_sigma
-        self.tag_detector_ptr.contents.refine_edges = refine_edges
-        self.tag_detector_ptr.contents.decode_sharpening = decode_sharpening
-        self.tag_detector_ptr.contents.debug = int(debug)
+        det = self.tag_detector_ptr.contents
+        det.nthreads = nthreads
+        det.quad_decimate = quad_decimate
+        det.quad_sigma = quad_sigma
+        det.refine_edges = refine_edges
+        det.decode_sharpening = decode_sharpening
+        det.debug = debug
+
+        # configure quad threshold parameters
+        det.qtp.min_cluster_pixels = min_cluster_pixels
+        det.qtp.max_nmaxima = max_nmaxima
+        if critical_rad is not None:
+            det.qtp.critical_rad = critical_rad
+            det.qtp.cos_critical_rad = math.cos(critical_rad)
+        det.qtp.max_line_fit_mse = max_line_fit_mse
+        det.qtp.min_white_black_diff = min_white_black_diff
+        det.qtp.deglitch = deglitch
 
     def __del__(self) -> None:
         if self.tag_detector_ptr is not None:

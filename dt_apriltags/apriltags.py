@@ -148,6 +148,8 @@ class Detection():
     """
     Combined pythonic wrapper for apriltag_detection and apriltag_pose
     """
+    __slots__ = ('tag_family', 'tag_id', 'hamming', 'decision_margin',
+                 'homography', 'center', 'corners', 'pose_R', 'pose_t', 'pose_err')
 
     def __init__(self):
         self.tag_family = None

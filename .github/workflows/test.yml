@@ -17,12 +17,19 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install package with test dependencies
-        run: pip install '.[test]'
+      - uses: astral-sh/setup-uv@v5
 
       - name: Run tests
-        run: python test/test.py
+        run: uv run --extra test test/test.py
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Type check
+        run: uvx --with numpy ty check dt_apriltags/

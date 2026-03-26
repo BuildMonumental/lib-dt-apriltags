@@ -327,6 +327,7 @@ class Detector(object):
         assert len(img.shape) == 2
         assert img.dtype == numpy.uint8
 
+        img = numpy.ascontiguousarray(img)
         c_img = _ImageU8(height=img.shape[0], width=img.shape[1], stride=img.strides[0], buf=img.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)))
 
         return_info = []

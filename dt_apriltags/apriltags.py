@@ -12,13 +12,12 @@ Apriltags 3 version: Aleksandar Petrov, Spring 2019
 Current maintainer: Andrea F. Daniele
 
 """
-from __future__ import division
-from __future__ import print_function
-
 import ctypes
 import os
+from collections.abc import Sequence
 
 import numpy
+import numpy.typing as npt
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -119,20 +118,20 @@ class _ApriltagPose(ctypes.Structure):
 
 ######################################################################
 
-def _ptr_to_array2d(datatype, ptr, rows, cols):
+def _ptr_to_array2d(datatype: type[ctypes._SimpleCData], ptr: ctypes._CData, rows: int, cols: int) -> npt.NDArray[numpy.float64]:
     array_type = (datatype * cols) * rows
     array_buf = array_type.from_address(ctypes.addressof(ptr))
     return numpy.ctypeslib.as_array(array_buf, shape=(rows, cols))
 
 
-def _matd_get_array(mat_ptr):
+def _matd_get_array(mat_ptr: ctypes._Pointer[_Matd]) -> npt.NDArray[numpy.float64]:
     return _ptr_to_array2d(ctypes.c_double,
                            mat_ptr.contents.data,
                            int(mat_ptr.contents.nrows),
                            int(mat_ptr.contents.ncols))
 
 
-def zarray_get(za, idx, ptr):
+def _zarray_get(za: ctypes._Pointer[_ZArray], idx: int, ptr: ctypes._CData) -> None:
     # memcpy(p, &za->data[idx*za->el_sz], za->el_sz);
     #
     # p                           = ptr
@@ -151,7 +150,18 @@ class Detection():
     __slots__ = ('tag_family', 'tag_id', 'hamming', 'decision_margin',
                  'homography', 'center', 'corners', 'pose_R', 'pose_t', 'pose_err')
 
-    def __init__(self):
+    tag_family: bytes | None
+    tag_id: int | None
+    hamming: int | None
+    decision_margin: float | None
+    homography: npt.NDArray[numpy.float64] | None
+    center: npt.NDArray[numpy.float64] | None
+    corners: npt.NDArray[numpy.float64] | None
+    pose_R: npt.NDArray[numpy.float64] | None
+    pose_t: npt.NDArray[numpy.float64] | None
+    pose_err: float | None
+
+    def __init__(self) -> None:
         self.tag_family = None
         self.tag_id = None
         self.hamming = None
@@ -163,7 +173,7 @@ class Detection():
         self.pose_t = None
         self.pose_err = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return ('Detection object:' +
                 '\ntag_family = ' + str(self.tag_family) +
                 '\ntag_id = ' + str(self.tag_id) +
@@ -176,7 +186,7 @@ class Detection():
                 '\npose_t = ' + str(self.pose_t) +
                 '\npose_err = ' + str(self.pose_err) + '\n')
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
 
@@ -206,15 +216,15 @@ class Detector(object):
     """
 
     def __init__(self,
-                 families='tag36h11',
-                 nthreads=1,
-                 quad_decimate=2.0,
-                 quad_sigma=0.0,
-                 refine_edges=1,
-                 decode_sharpening=0.25,
-                 debug=0,
-                 hamming=2,
-                 searchpath=['apriltags', '.', dir_path, '../apriltags']):
+                 families: str = 'tag36h11',
+                 nthreads: int = 1,
+                 quad_decimate: float = 2.0,
+                 quad_sigma: float = 0.0,
+                 refine_edges: int = 1,
+                 decode_sharpening: float = 0.25,
+                 debug: int = 0,
+                 hamming: int = 2,
+                 searchpath: list[str] = ['apriltags', '.', dir_path, '../apriltags']) -> None:
 
         # detect OS to get extension for DLL
         uname0 = os.uname()[0]
@@ -225,9 +235,9 @@ class Detector(object):
 
         filename = 'libapriltag' + extension
 
-        self.libc = None
+        self.libc: ctypes.CDLL | None = None
         self.tag_detector = None
-        self.tag_detector_ptr = None
+        self.tag_detector_ptr: ctypes._Pointer[_ApriltagDetector] | None = None
 
         for path in searchpath:
             relpath = os.path.join(os.path.dirname(__file__), path, filename)
@@ -274,7 +284,7 @@ class Detector(object):
         self.tag_detector_ptr = self.libc.apriltag_detector_create()
 
         # create the family
-        self.tag_families = dict()
+        self.tag_families: dict[str, tuple[ctypes._Pointer[_ApriltagFamily], object]] = dict()
         known_families = {
             'tag16h5': (self.libc.tag16h5_create, self.libc.tag16h5_destroy),
             'tag25h9': (self.libc.tag25h9_create, self.libc.tag25h9_destroy),
@@ -301,7 +311,7 @@ class Detector(object):
         self.tag_detector_ptr.contents.decode_sharpening = decode_sharpening
         self.tag_detector_ptr.contents.debug = int(debug)
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self.tag_detector_ptr is not None:
             # destroy the detector
             self.libc.apriltag_detector_destroy.restype = None
@@ -311,7 +321,7 @@ class Detector(object):
             for tf, destroy_fn in self.tag_families.values():
                 destroy_fn(tf)
 
-    def detect(self, img, estimate_tag_pose=False, camera_params=None, tag_size=None):
+    def detect(self, img: npt.NDArray[numpy.uint8], estimate_tag_pose: bool = False, camera_params: Sequence[float] | None = None, tag_size: float | None = None) -> list[Detection]:
         """
         Run detectons on the provided image. The image must be a grayscale
         image of type numpy.uint8.
@@ -330,7 +340,7 @@ class Detector(object):
                     'tag_size must be provided to detect if estimate_tag_pose is set to True')
             camera_fx, camera_fy, camera_cx, camera_cy = camera_params
 
-        return_info = []
+        return_info: list[Detection] = []
 
         # detect apriltags in the image
         detections = self.libc.apriltag_detector_detect(self.tag_detector_ptr, ctypes.byref(c_img))
@@ -340,7 +350,7 @@ class Detector(object):
         for i in range(0, detections.contents.size):
 
             # extract the data for each apriltag that was identified
-            zarray_get(detections, i, ctypes.byref(apriltag))
+            _zarray_get(detections, i, ctypes.byref(apriltag))
 
             tag = apriltag.contents
 

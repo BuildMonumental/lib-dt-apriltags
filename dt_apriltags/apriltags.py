@@ -143,10 +143,10 @@ class Detection():
     """
     Pythonic wrapper for a single apriltag detection result.
     """
-    __slots__ = ('tag_family', 'tag_id', 'hamming', 'decision_margin',
+    __slots__ = ('family', 'tag_id', 'hamming', 'decision_margin',
                  'homography', 'center', 'corners')
 
-    tag_family: bytes
+    family: str
     tag_id: int
     hamming: int
     decision_margin: float
@@ -154,10 +154,10 @@ class Detection():
     center: npt.NDArray[numpy.float64]
     corners: npt.NDArray[numpy.float64]
 
-    def __init__(self, tag_family: bytes, tag_id: int, hamming: int,
+    def __init__(self, family: str, tag_id: int, hamming: int,
                  decision_margin: float, homography: npt.NDArray[numpy.float64],
                  center: npt.NDArray[numpy.float64], corners: npt.NDArray[numpy.float64]) -> None:
-        self.tag_family = tag_family
+        self.family = family
         self.tag_id = tag_id
         self.hamming = hamming
         self.decision_margin = decision_margin
@@ -167,7 +167,7 @@ class Detection():
 
     def __str__(self) -> str:
         return ('Detection object:' +
-                '\ntag_family = ' + str(self.tag_family) +
+                '\nfamily = ' + self.family +
                 '\ntag_id = ' + str(self.tag_id) +
                 '\nhamming = ' + str(self.hamming) +
                 '\ndecision_margin = ' + str(self.decision_margin) +
@@ -367,7 +367,7 @@ class Detector(object):
             tag = apriltag.contents
 
             detection = Detection(
-                tag_family=ctypes.string_at(tag.family.contents.name),
+                family=ctypes.string_at(tag.family.contents.name).decode(),
                 tag_id=tag.id,
                 hamming=tag.hamming,
                 decision_margin=tag.decision_margin,

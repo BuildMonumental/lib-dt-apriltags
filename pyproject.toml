@@ -34,3 +34,7 @@ install.strip = false
 sdist.include = ["apriltags/**"]
 sdist.exclude = ["apriltags/.git/**"]
 wheel.license-files = []
+
+
+[tool.ty.src]
+include = ["dt_apriltags"]
